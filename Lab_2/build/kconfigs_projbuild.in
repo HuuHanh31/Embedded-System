@@ -3,4 +3,5 @@ source "C:/Espressif/frameworks/esp-idf-v4.4.2/components/bootloader/Kconfig.pro
 source "C:/Espressif/frameworks/esp-idf-v4.4.2/components/esp_rom/Kconfig.projbuild"
 source "C:/Espressif/frameworks/esp-idf-v4.4.2/components/esptool_py/Kconfig.projbuild"
 source "C:/Espressif/frameworks/esp-idf-v4.4.2/components/partition_table/Kconfig.projbuild"
-source "C:/Users/Administrator/FreeRTOS_Task/main/Kconfig.projbuild"
+source "C:/Academic/Embedded"
+source "System/Embedded-System/Lab_2/main/Kconfig.projbuild"
