@@ -6,8 +6,8 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#define TIMER_MESSEAGE_1 "ahihi"
-#define TIMER_MESSEAGE_2 "ihaha"
+#define TIMER_MESSAGE_1 "ahihi"
+#define TIMER_MESSAGE_2 "ihaha"
 #define TIMER_ID_1 (0)
 #define TIMER_ID_2 (1)
 #define TIMER_REPEAT_1 (10)
@@ -38,8 +38,8 @@ void print_message_callback(TimerHandle_t xTimer)
 
     if (info->id == TIMER_ID_1)
     {
-        print_current_time();
-        printf(TIMER_MESSEAGE_1 "\n");
+        // print_current_time();
+        printf(TIMER_MESSAGE_1 "\n");
         info->timer_elapsed_count++;
         if (info->timer_elapsed_count == TIMER_REPEAT_1)
         {
@@ -48,8 +48,8 @@ void print_message_callback(TimerHandle_t xTimer)
     }
     else if (info->id == TIMER_ID_2)
     {
-        print_current_time();
-        printf(TIMER_MESSEAGE_2 "\n");
+        // print_current_time();
+        printf(TIMER_MESSAGE_2 "\n");
         info->timer_elapsed_count++;
         if (info->timer_elapsed_count == TIMER_REPEAT_2)
         {
