@@ -1,4 +1,6 @@
 #include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
+#include "freertos/projdefs.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
@@ -6,8 +8,8 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-#define TIMER_MESSAGE_1 "ahihi"
-#define TIMER_MESSAGE_2 "ihaha"
+#define TIMER_MESSAGE_1 " ahihi"
+#define TIMER_MESSAGE_2 " ihaha"
 #define TIMER_ID_1 (0)
 #define TIMER_ID_2 (1)
 #define TIMER_REPEAT_1 (10)
@@ -38,22 +40,32 @@ void print_message_callback(TimerHandle_t xTimer)
 
     if (info->id == TIMER_ID_1)
     {
-        // print_current_time();
+        printf("Time: ");
+        print_current_time();
+        printf(" Message: ");
         printf(TIMER_MESSAGE_1 "\n");
         info->timer_elapsed_count++;
         if (info->timer_elapsed_count == TIMER_REPEAT_1)
         {
-            xTimerStop(xTimer, 0);
+            if (xTimerStop(xTimer, 0) == pdFAIL)
+            {
+                printf("Fail to stop timer 1\n");
+            }
         }
     }
     else if (info->id == TIMER_ID_2)
     {
-        // print_current_time();
+        printf("Time: ");
+        print_current_time();
+        printf(" Message: ");
         printf(TIMER_MESSAGE_2 "\n");
         info->timer_elapsed_count++;
         if (info->timer_elapsed_count == TIMER_REPEAT_2)
         {
-            xTimerStop(xTimer, 0);
+            if (xTimerStop(xTimer, 0) == pdFAIL)
+            {
+                printf("Fail to stop timer 1\n");
+            }
         }
     }
 }
@@ -70,5 +82,19 @@ void app_main(void)
     timer[1] = xTimerCreate("Timer 2", pdMS_TO_TICKS(TIMER_PERIOD_2_MS), pdTRUE,
                             (void *)&info[1], print_message_callback);
 
+    for (uint32_t i = 0; i < 2; i++)
+    {
+        if (timer[i] == NULL)
+        {
+            printf("Timer %" PRIu32 " failed to be created\n", i + 1);
+        }
+        else
+        {
+            if (xTimerStart(timer[i], 0) == pdFAIL)
+            {
+                printf("Timer %" PRIu32 " failed to start\n", i + 1);
+            }
+        }
+    }
     vTaskDelete(NULL);
 }
