@@ -1,100 +1,147 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/portmacro.h"
-#include "freertos/projdefs.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
-#include "freertos/timers.h"
-#include "sys/time.h"
-#include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "sdkconfig.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_system.h"
+#include "esp_spi_flash.h"
+#include "driver/gpio.h"
+#include "freertos/queue.h"
+#include <time.h>
+#include <string.h>
 
-#define TIMER_MESSAGE_1 " ahihi"
-#define TIMER_MESSAGE_2 " ihaha"
-#define TIMER_ID_1 (0)
-#define TIMER_ID_2 (1)
-#define TIMER_REPEAT_1 (10)
-#define TIMER_REPEAT_2 (5)
-#define TIMER_PERIOD_1_MS (2000)
-#define TIMER_PERIOD_2_MS (3000)
-
-typedef struct
+struct QueueData
 {
-    uint32_t timer_elapsed_count;
-    uint32_t id;
-} Timer_info_t;
+    int dataID;
+    char message[20];
+    char reject;
+};
 
-TimerHandle_t timer[2];
-Timer_info_t info[2] = {0};
-
-static void print_current_time()
+struct TaskType
 {
-    struct timeval tv_now;
-    gettimeofday(&tv_now, NULL);
-    int64_t time_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
-    printf("%lld", time_us);
+    int taskID;
+    char taskName[20];
+};
+
+QueueHandle_t xQueue;
+
+struct TaskType Sensor_Air = {.taskName = "air", .taskID = 0};
+struct TaskType Sensor_Moisture = {.taskName = "moisture", .taskID = 1};
+struct TaskType Sensor_Water = {.taskName = "water", .taskID = 2};
+struct TaskType Sensor_Light = {.taskName = "light", .taskID = 3};
+
+void XQueue_Start(void *pvParameter)
+{
+    xQueue = xQueueCreate(10, sizeof(struct QueueData *));
+    if (xQueue == NULL)
+    {
+        printf("Failed to create queue, not enough memory\n");
+    }
+    vTaskDelete(NULL);
 }
 
-void print_message_callback(TimerHandle_t xTimer)
+void reception_Task(void *pvParameter)
 {
-    Timer_info_t *info = (Timer_info_t *)pvTimerGetTimerID(xTimer);
+    time_t t;
 
-    if (info->id == TIMER_ID_1)
+    srand((unsigned)time(&t));
+    for (;;)
     {
-        printf("Time: ");
-        print_current_time();
-        printf(" Message: ");
-        printf(TIMER_MESSAGE_1 "\n");
-        info->timer_elapsed_count++;
-        if (info->timer_elapsed_count == TIMER_REPEAT_1)
+        while (xQueue == NULL)
         {
-            if (xTimerStop(xTimer, 0) == pdFAIL)
+            printf("xQueue is NULL\n");
+        }
+        int ran_job = (rand() % 4);
+        int ran_delay = (rand() % 5) + 1;
+        struct QueueData *xData = malloc(sizeof(struct QueueData));
+
+        if (xData != NULL)
+        {
+            switch (ran_job)
             {
-                printf("Fail to stop timer 1\n");
+            case 0:
+                xData->dataID = 0;
+                strcpy(xData->message, "AIR");
+                xData->reject = 0;
+                break;
+            case 1:
+                xData->dataID = 1;
+                strcpy(xData->message, "MOISTURE");
+                xData->reject = 0;
+                break;
+            case 2:
+                xData->dataID = 2;
+                strcpy(xData->message, "WATER");
+                xData->reject = 0;
+                break;
+            case 3:
+                xData->dataID = 3;
+                strcpy(xData->message, "LIGHT");
+                xData->reject = 0;
+                break;
+            }
+            if (xQueueSend(xQueue, (void *)&xData, 100) == errQUEUE_FULL)
+            {
+                printf("Failed to Import job with ID %d", ran_job);
             }
         }
-    }
-    else if (info->id == TIMER_ID_2)
-    {
-        printf("Time: ");
-        print_current_time();
-        printf(" Message: ");
-        printf(TIMER_MESSAGE_2 "\n");
-        info->timer_elapsed_count++;
-        if (info->timer_elapsed_count == TIMER_REPEAT_2)
+        else
         {
-            if (xTimerStop(xTimer, 0) == pdFAIL)
+            printf("Can't allocate new struct");
+        }
+        vTaskDelay(pdMS_TO_TICKS(100 * ran_delay));
+    }
+    vTaskDelete(NULL);
+}
+
+void active_Task(void *pvParameter)
+{
+    for (;;)
+    {
+        struct TaskType *task = (struct TaskType *)pvParameter;
+        struct QueueData *pRxMessage;
+        if (xQueue != NULL)
+        {
+            if (xQueueReceive(xQueue, &pRxMessage, (TickType_t)10) == pdPASS)
             {
-                printf("Fail to stop timer 1\n");
+                if (pRxMessage->dataID == task->taskID)
+                {
+                    printf("%s\n", pRxMessage->message);
+                    // always remember to free the memory when done.
+                    free(pRxMessage);
+                }
+                else
+                {
+                    printf("%s: received %s, but it's not my task\n", task->taskName, pRxMessage->message);
+                    if (pRxMessage->reject < 3)
+                    {
+                        pRxMessage->reject++;
+                        xQueueSendToFront(xQueue, (void *)&pRxMessage, (TickType_t)10);
+                    }
+                    else
+                    {
+                        printf("This task %s is rejected %d times, skiping the task\n", pRxMessage->message, pRxMessage->reject++);
+                        free(pRxMessage);
+                    }
+                }
+            }
+            else
+            {
+                printf("queue empty\n");
             }
         }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
+    vTaskDelete(NULL);
 }
 
 void app_main(void)
 {
-    info[0].timer_elapsed_count = 0;
-    info[0].id = TIMER_ID_1;
-    timer[0] = xTimerCreate("Timer 1", pdMS_TO_TICKS(TIMER_PERIOD_1_MS), pdTRUE,
-                            (void *)&info[0], print_message_callback);
-
-    info[1].timer_elapsed_count = 0;
-    info[1].id = TIMER_ID_2;
-    timer[1] = xTimerCreate("Timer 2", pdMS_TO_TICKS(TIMER_PERIOD_2_MS), pdTRUE,
-                            (void *)&info[1], print_message_callback);
-
-    for (uint32_t i = 0; i < 2; i++)
-    {
-        if (timer[i] == NULL)
-        {
-            printf("Timer %" PRIu32 " failed to be created\n", i + 1);
-        }
-        else
-        {
-            if (xTimerStart(timer[i], 0) == pdFAIL)
-            {
-                printf("Timer %" PRIu32 " failed to start\n", i + 1);
-            }
-        }
-    }
-    vTaskDelete(NULL);
+    xTaskCreate(&XQueue_Start, "queue_start", 2048, NULL, 10, NULL);
+    xTaskCreate(&reception_Task, "rec", 2048, NULL, 10, NULL);
+    xTaskCreate(&active_Task, "air", 2048, (void *)&Sensor_Air, 10, NULL);
+    xTaskCreate(&active_Task, "moisture", 2048, (void *)&Sensor_Moisture, 10, NULL);
+    xTaskCreate(&active_Task, "water", 2048, (void *)&Sensor_Water, 10, NULL);
+    xTaskCreate(&active_Task, "light", 2048, (void *)&Sensor_Light, 10, NULL);
 }
